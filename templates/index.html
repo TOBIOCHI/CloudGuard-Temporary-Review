@@ -1,0 +1,407 @@
+
+{% extends "base.html" %}
+
+{% block title %}CloudGuard - Security Dashboard{% endblock %}
+
+{% block content %}
+
+<div class="container-fluid py-4">
+
+    <!-- Dashboard heading -->
+    <div class="d-flex flex-wrap justify-content-between align-items-center mb-4">
+        <div>
+            <h1 class="h3 mb-1">CloudGuard Security Dashboard</h1>
+            <p class="text-muted mb-0">
+                AWS cloud misconfiguration detection and monitoring
+            </p>
+        </div>
+
+        <form action="{{ url_for('run_scan') }}" method="POST">
+            <button type="submit" class="btn btn-primary">
+                Run New Scan
+            </button>
+        </form>
+    </div>
+
+    <!-- Latest scan summary -->
+    {% if latest_scan %}
+
+    <div class="card mb-4">
+        <div class="card-header">
+            <h5 class="mb-0">Latest Scan Summary</h5>
+        </div>
+
+        <div class="card-body">
+            <div class="row g-3">
+
+                <div class="col-md-3">
+                    <div class="border rounded p-3 h-100">
+                        <p class="text-muted mb-1">Total Findings</p>
+                        <h3>{{ latest_scan.get('total_findings', 0) }}</h3>
+                    </div>
+                </div>
+
+                <div class="col-md-3">
+                    <div class="border rounded p-3 h-100">
+                        <p class="text-muted mb-1">Scanners Completed</p>
+                        <h3>
+                            {{ latest_scan.get('completed_scanners', 0) }}
+                            /
+                            {{ latest_scan.get('total_scanners', 0) }}
+                        </h3>
+                    </div>
+                </div>
+
+                <div class="col-md-3">
+                    <div class="border rounded p-3 h-100">
+                        <p class="text-muted mb-1">Scan Errors</p>
+                        <h3>{{ latest_scan.get('total_errors', 0) }}</h3>
+                    </div>
+                </div>
+
+                <div class="col-md-3">
+                    <div class="border rounded p-3 h-100">
+                        <p class="text-muted mb-1">Duration</p>
+                        <h3>
+                            {{ "%.2f"|format(latest_scan.get('duration_seconds') or 0) }}s
+                        </h3>
+                    </div>
+                </div>
+
+            </div>
+
+            <hr>
+
+            <p class="mb-1">
+                <strong>Started:</strong>
+                {{ latest_scan.get('scan_started_at', 'N/A') }}
+            </p>
+
+            <p class="mb-0">
+                <strong>Completed:</strong>
+                {{ latest_scan.get('scan_completed_at', 'N/A') }}
+            </p>
+        </div>
+    </div>
+
+    <!-- Severity summary -->
+    {% set severity = latest_scan.get('severity_counts', {}) %}
+
+    <div class="card mb-4">
+        <div class="card-header">
+            <h5 class="mb-0">Findings by Severity</h5>
+        </div>
+
+        <div class="card-body">
+            <div class="row g-3">
+
+                {% for level in ['CRITICAL', 'HIGH', 'MEDIUM', 'LOW', 'INFO'] %}
+                <div class="col-6 col-md">
+                    <div class="border rounded p-3 text-center h-100">
+                        <div class="text-muted small">{{ level }}</div>
+                        <h3 class="mb-0">
+                            {{ severity.get(level, 0) }}
+                        </h3>
+                    </div>
+                </div>
+                {% endfor %}
+
+            </div>
+        </div>
+    </div>
+
+    {% else %}
+
+    <div class="alert alert-info mb-4">
+        No scans have been saved yet. Select
+        <strong>Run New Scan</strong> to begin your first AWS security scan.
+    </div>
+
+    {% endif %}
+
+    <!-- AWS service results -->
+    {% if latest_details and latest_details.get('services') %}
+
+    <div class="card mb-4">
+        <div class="card-header">
+            <h5 class="mb-0">AWS Service Scan Results</h5>
+        </div>
+
+        <div class="table-responsive">
+            <table class="table table-hover align-middle mb-0">
+                <thead>
+                    <tr>
+                        <th>AWS Service</th>
+                        <th>Resources Scanned</th>
+                        <th>Findings</th>
+                        <th>Errors</th>
+                        <th>Status</th>
+                    </tr>
+                </thead>
+
+                <tbody>
+                    {% for service_name, service in latest_details.get('services', {}).items() %}
+                    <tr>
+                        <td><strong>{{ service_name }}</strong></td>
+
+                        <td>
+                            {% if service_name == 'S3' %}
+                                {{ service.get('scanned_buckets', 0) }}
+                            {% elif service_name == 'IAM' %}
+                                {{ service.get('scanned_users', 0) }}
+                            {% elif service_name == 'EC2' %}
+                                {{ service.get('scanned_security_groups', 0) }}
+                            {% elif service_name == 'EBS' %}
+                                {{ service.get('scanned_volumes', 0) }}
+                            {% elif service_name == 'RDS' %}
+                                {{ service.get('scanned_instances', 0) }}
+                            {% elif service_name == 'CloudTrail' %}
+                                {{ service.get('scanned_trails', 0) }}
+                            {% else %}
+                                N/A
+                            {% endif %}
+                        </td>
+
+                        <td>{{ service.get('findings', [])|length }}</td>
+                        <td>{{ service.get('errors', [])|length }}</td>
+
+                        <td>
+                            {% if service.get('errors', [])|length == 0 %}
+                                <span class="badge bg-success">Completed</span>
+                            {% else %}
+                                <span class="badge bg-warning text-dark">
+                                    Completed with errors
+                                </span>
+                            {% endif %}
+                        </td>
+                    </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+    </div>
+
+    {% endif %}
+
+    <!-- Security findings -->
+    {% if latest_details and latest_details.get('findings') %}
+
+    <div class="card mb-4">
+
+        <div class="card-header d-flex flex-wrap justify-content-between align-items-center gap-2">
+            <h5 class="mb-0">Security Findings</h5>
+
+            <span class="badge bg-secondary">
+                {{ latest_details.get('findings', [])|length }} findings
+            </span>
+        </div>
+
+        <!-- Finding search and severity filter -->
+        <div class="card-body border-bottom">
+            <div class="row g-3">
+
+                <div class="col-md-8">
+                    <label for="findingSearch" class="form-label">
+                        Search Findings
+                    </label>
+
+                    <input
+                        type="search"
+                        class="form-control"
+                        id="findingSearch"
+                        placeholder="Search service, title, resource or check..."
+                        autocomplete="off"
+                    >
+                </div>
+
+                <div class="col-md-4">
+                    <label for="severityFilter" class="form-label">
+                        Filter by Severity
+                    </label>
+
+                    <select class="form-select" id="severityFilter">
+                        <option value="">All Severities</option>
+                        <option value="CRITICAL">Critical</option>
+                        <option value="HIGH">High</option>
+                        <option value="MEDIUM">Medium</option>
+                        <option value="LOW">Low</option>
+                        <option value="INFO">Info</option>
+                    </select>
+                </div>
+
+            </div>
+        </div>
+
+        <div class="table-responsive">
+            <table
+                class="table table-hover align-middle mb-0"
+                id="findingsTable"
+            >
+
+                <thead>
+                    <tr>
+                        <th>Severity</th>
+                        <th>Service</th>
+                        <th>Finding</th>
+                        <th>Resource</th>
+                        <th>Check</th>
+                    </tr>
+                </thead>
+
+                <tbody>
+                    {% for finding in latest_details.get('findings', []) %}
+
+                    {% set level = finding.get('severity', 'INFO')|upper %}
+
+                    <tr data-severity="{{ level }}">
+                        <td>
+                            {% if level == 'CRITICAL' %}
+                                <span class="badge bg-danger">CRITICAL</span>
+                            {% elif level == 'HIGH' %}
+                                <span class="badge bg-danger">HIGH</span>
+                            {% elif level == 'MEDIUM' %}
+                                <span class="badge bg-warning text-dark">MEDIUM</span>
+                            {% elif level == 'LOW' %}
+                                <span class="badge bg-info text-dark">LOW</span>
+                            {% else %}
+                                <span class="badge bg-secondary">{{ level }}</span>
+                            {% endif %}
+                        </td>
+
+                        <td>{{ finding.get('service', 'N/A') }}</td>
+
+                        <td>
+                            <strong>{{ finding.get('title', 'Untitled finding') }}</strong>
+                            <div class="small text-muted">
+                                {{ finding.get('description', '') }}
+                            </div>
+                        </td>
+
+                        <td>
+                            {{ finding.get('resource', finding.get('resource_id', 'N/A')) }}
+                        </td>
+
+                        <td>
+                            {{ finding.get('check_name', finding.get('check', 'N/A')) }}
+                        </td>
+                    </tr>
+
+                    {% endfor %}
+
+                    <tr id="noFindingsMatch" style="display: none;">
+                        <td colspan="5" class="text-center text-muted py-4">
+                            No findings match your search or severity filter.
+                        </td>
+                    </tr>
+
+                </tbody>
+            </table>
+        </div>
+
+        <div class="card-footer text-muted small">
+            Search and severity filters work together.
+        </div>
+
+    </div>
+
+    {% elif latest_details %}
+
+    <div class="alert alert-success mb-4">
+        No security findings were returned by the latest scan.
+        This does not necessarily mean every AWS resource or region is secure.
+    </div>
+
+    {% endif %}
+
+    <!-- Scan errors -->
+    {% if latest_details and latest_details.get('errors') %}
+
+    <div class="card border-warning mb-4">
+        <div class="card-header">
+            <h5 class="mb-0">Scan Errors</h5>
+        </div>
+
+        <div class="card-body">
+            {% for error in latest_details.get('errors', []) %}
+            <div class="border-bottom py-2">
+                <strong>{{ error.get('service', 'Unknown service') }}</strong>
+
+                <div class="text-muted small">
+                    {{ error.get('operation', 'Unknown operation') }}
+                </div>
+
+                <div>{{ error.get('error', 'Unknown error') }}</div>
+            </div>
+            {% endfor %}
+        </div>
+    </div>
+
+    {% endif %}
+
+    <!-- Scan history -->
+    <div class="card mb-4" id="scan-history">
+
+        <div class="card-header">
+            <h5 class="mb-0">Scan History</h5>
+        </div>
+
+        <div class="table-responsive">
+            <table class="table table-hover align-middle mb-0">
+
+                <thead>
+                    <tr>
+                        <th>Scan ID</th>
+                        <th>Date</th>
+                        <th>Findings</th>
+                        <th>Errors</th>
+                        <th>Scanners</th>
+                        <th>Action</th>
+                    </tr>
+                </thead>
+
+                <tbody>
+                    {% for scan in scan_history %}
+
+                    <tr>
+                        <td>#{{ scan.get('id') }}</td>
+
+                        <td>{{ scan.get('scan_started_at', 'N/A') }}</td>
+
+                        <td>{{ scan.get('total_findings', 0) }}</td>
+
+                        <td>{{ scan.get('total_errors', 0) }}</td>
+
+                        <td>
+                            {{ scan.get('completed_scanners', 0) }}
+                            /
+                            {{ scan.get('total_scanners', 0) }}
+                        </td>
+
+                        <td>
+                            <a
+                                href="{{ url_for('scan_details', scan_id=scan.get('id')) }}"
+                                class="btn btn-sm btn-outline-primary"
+                            >
+                                View Details
+                            </a>
+                        </td>
+                    </tr>
+
+                    {% else %}
+
+                    <tr>
+                        <td colspan="6" class="text-center text-muted py-4">
+                            No scan history available.
+                        </td>
+                    </tr>
+
+                    {% endfor %}
+                </tbody>
+
+            </table>
+        </div>
+    </div>
+
+</div>
+
+{% endblock %}

@@ -1,0 +1,343 @@
+
+{% extends "base.html" %}
+
+{% block title %}CloudGuard - Scan #{{ scan.get('id') }}{% endblock %}
+
+{% block content %}
+
+<div class="container-fluid py-4">
+
+    <!-- Page heading and actions -->
+    <div class="d-flex flex-wrap justify-content-between align-items-center mb-4">
+
+        <div>
+            <h1 class="h3 mb-1">Scan Details #{{ scan.get('id') }}</h1>
+            <p class="text-muted mb-0">
+                Detailed AWS security scan results
+            </p>
+        </div>
+
+        <div class="d-flex flex-wrap gap-2">
+
+            <a href="{{ url_for('download_scan_report', scan_id=scan.get('id')) }}"
+               class="btn btn-primary">
+                <i class="bi bi-file-earmark-pdf me-1"></i>
+                Download PDF Report
+            </a>
+
+            <a href="{{ url_for('index') }}"
+               class="btn btn-outline-secondary">
+                Back to Dashboard
+            </a>
+
+        </div>
+
+    </div>
+
+    <!-- Scan overview -->
+    <div class="card mb-4">
+
+        <div class="card-header">
+            <h5 class="mb-0">Scan Overview</h5>
+        </div>
+
+        <div class="card-body">
+
+            <div class="row g-3">
+
+                <div class="col-md-3">
+                    <div class="border rounded p-3 h-100">
+                        <div class="text-muted small">Total Findings</div>
+                        <h3>{{ scan.get('total_findings', 0) }}</h3>
+                    </div>
+                </div>
+
+                <div class="col-md-3">
+                    <div class="border rounded p-3 h-100">
+                        <div class="text-muted small">Scanners Completed</div>
+                        <h3>
+                            {{ scan.get('completed_scanners', 0) }}
+                            /
+                            {{ scan.get('total_scanners', 0) }}
+                        </h3>
+                    </div>
+                </div>
+
+                <div class="col-md-3">
+                    <div class="border rounded p-3 h-100">
+                        <div class="text-muted small">Scan Errors</div>
+                        <h3>{{ scan.get('total_errors', 0) }}</h3>
+                    </div>
+                </div>
+
+                <div class="col-md-3">
+                    <div class="border rounded p-3 h-100">
+                        <div class="text-muted small">Duration</div>
+                        <h3>
+                            {{ "%.2f"|format(scan.get('duration_seconds') or 0) }}s
+                        </h3>
+                    </div>
+                </div>
+
+            </div>
+
+            <hr>
+
+            <p>
+                <strong>Started:</strong>
+                {{ scan.get('scan_started_at', 'N/A') }}
+            </p>
+
+            <p class="mb-0">
+                <strong>Completed:</strong>
+                {{ scan.get('scan_completed_at', 'N/A') }}
+            </p>
+
+        </div>
+    </div>
+
+    <!-- Severity breakdown -->
+    {% set severity = scan.get('severity_counts', {}) %}
+
+    <div class="card mb-4">
+
+        <div class="card-header">
+            <h5 class="mb-0">Severity Breakdown</h5>
+        </div>
+
+        <div class="card-body">
+
+            <div class="row g-3">
+
+                {% for level in ['CRITICAL', 'HIGH', 'MEDIUM', 'LOW', 'INFO'] %}
+
+                <div class="col-6 col-md">
+                    <div class="border rounded p-3 text-center h-100">
+                        <div class="text-muted small">{{ level }}</div>
+                        <h3 class="mb-0">
+                            {{ severity.get(level, 0) }}
+                        </h3>
+                    </div>
+                </div>
+
+                {% endfor %}
+
+            </div>
+
+        </div>
+    </div>
+
+    <!-- Service results -->
+    <div class="card mb-4">
+
+        <div class="card-header">
+            <h5 class="mb-0">AWS Service Results</h5>
+        </div>
+
+        <div class="table-responsive">
+
+            <table class="table table-hover align-middle mb-0">
+
+                <thead>
+                    <tr>
+                        <th>Service</th>
+                        <th>Resources Scanned</th>
+                        <th>Findings</th>
+                        <th>Errors</th>
+                    </tr>
+                </thead>
+
+                <tbody>
+
+                    {% for service_name, service in details.get('services', {}).items() %}
+
+                    <tr>
+                        <td>
+                            <strong>{{ service_name }}</strong>
+                        </td>
+
+                        <td>
+                            {% if service_name == 'S3' %}
+                                {{ service.get('scanned_buckets', 0) }}
+                            {% elif service_name == 'IAM' %}
+                                {{ service.get('scanned_users', 0) }}
+                            {% elif service_name == 'EC2' %}
+                                {{ service.get('scanned_security_groups', 0) }}
+                            {% elif service_name == 'EBS' %}
+                                {{ service.get('scanned_volumes', 0) }}
+                            {% elif service_name == 'RDS' %}
+                                {{ service.get('scanned_instances', 0) }}
+                            {% elif service_name == 'CloudTrail' %}
+                                {{ service.get('scanned_trails', 0) }}
+                            {% else %}
+                                N/A
+                            {% endif %}
+                        </td>
+
+                        <td>
+                            {{ service.get('findings', [])|length }}
+                        </td>
+
+                        <td>
+                            {{ service.get('errors', [])|length }}
+                        </td>
+                    </tr>
+
+                    {% else %}
+
+                    <tr>
+                        <td colspan="4" class="text-center text-muted py-4">
+                            No service results available.
+                        </td>
+                    </tr>
+
+                    {% endfor %}
+
+                </tbody>
+
+            </table>
+
+        </div>
+    </div>
+
+    <!-- Detailed findings -->
+    <div class="card mb-4">
+
+        <div class="card-header">
+            <h5 class="mb-0">Security Findings</h5>
+        </div>
+
+        <div class="card-body">
+
+            {% for finding in details.get('findings', []) %}
+
+            <div class="border rounded p-3 mb-3">
+
+                <div class="d-flex flex-wrap justify-content-between align-items-center mb-2">
+
+                    <h5 class="mb-1">
+                        {{ finding.get('title', 'Untitled finding') }}
+                    </h5>
+
+                    {% set level = finding.get('severity', 'INFO')|upper %}
+
+                    {% if level in ['CRITICAL', 'HIGH'] %}
+                        <span class="badge bg-danger">{{ level }}</span>
+                    {% elif level == 'MEDIUM' %}
+                        <span class="badge bg-warning text-dark">{{ level }}</span>
+                    {% elif level == 'LOW' %}
+                        <span class="badge bg-info text-dark">{{ level }}</span>
+                    {% else %}
+                        <span class="badge bg-secondary">{{ level }}</span>
+                    {% endif %}
+
+                </div>
+
+                <p class="mb-2">
+                    {{ finding.get('description', 'No description available.') }}
+                </p>
+
+                <p class="mb-1">
+                    <strong>Service:</strong>
+                    {{ finding.get('service', 'N/A') }}
+                </p>
+
+                <p class="mb-1">
+                    <strong>Resource:</strong>
+                    {{ finding.get('resource', finding.get('resource_id', 'N/A')) }}
+                </p>
+
+                <p class="mb-1">
+                    <strong>Check:</strong>
+                    {{ finding.get('check_name', finding.get('check', 'N/A')) }}
+                </p>
+
+                <div class="mt-3">
+                    <strong>Recommendation</strong>
+                    <p class="mb-0">
+                        {{ finding.get('recommendation', 'No recommendation provided.') }}
+                    </p>
+                </div>
+
+                {% if finding.get('evidence') %}
+
+                <details class="mt-3">
+                    <summary class="fw-bold">
+                        View Technical Evidence
+                    </summary>
+
+                    <pre class="bg-light border rounded p-3 mt-2 mb-0"><code>{{ finding.get('evidence')|tojson(indent=2) }}</code></pre>
+                </details>
+
+                {% endif %}
+
+            </div>
+
+            {% else %}
+
+            <div class="alert alert-success mb-0">
+                No security findings were recorded for this scan.
+            </div>
+
+            {% endfor %}
+
+        </div>
+    </div>
+
+    <!-- Scan errors -->
+    <div class="card mb-4">
+
+        <div class="card-header">
+            <h5 class="mb-0">Scan Errors</h5>
+        </div>
+
+        <div class="card-body">
+
+            {% for error in details.get('errors', []) %}
+
+            <div class="border rounded p-3 mb-2">
+
+                <strong>
+                    {{ error.get('service', 'Unknown service') }}
+                </strong>
+
+                <p class="text-muted mb-1">
+                    Operation: {{ error.get('operation', 'Unknown') }}
+                </p>
+
+                <p class="mb-0">
+                    {{ error.get('error', 'Unknown error') }}
+                </p>
+
+            </div>
+
+            {% else %}
+
+            <p class="text-success mb-0">
+                No scan errors were recorded.
+            </p>
+
+            {% endfor %}
+
+        </div>
+    </div>
+
+    <!-- Bottom actions -->
+    <div class="d-flex flex-wrap justify-content-center gap-2 mb-4">
+
+        <a href="{{ url_for('download_scan_report', scan_id=scan.get('id')) }}"
+           class="btn btn-primary">
+            <i class="bi bi-file-earmark-pdf me-1"></i>
+            Download PDF Report
+        </a>
+
+        <a href="{{ url_for('index') }}"
+           class="btn btn-outline-secondary">
+            Return to Dashboard
+        </a>
+
+    </div>
+
+</div>
+
+{% endblock %}

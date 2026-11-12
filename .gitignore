@@ -1,0 +1,38 @@
+
+# Python
+__pycache__/
+*.py[cod]
+.pytest_cache/
+*.egg-info/
+
+# Virtual environments
+.venv/
+venv/
+env/
+
+# Environment variables and secrets
+.env
+.env.*
+!.env.example
+.aws/
+*accessKeys*.csv
+*credentials*.csv
+
+# AWS and generated scan data
+cloudguard_scan_results.json
+data/*.db
+data/reports/*.pdf
+
+# Generated files
+*.log
+*.tmp
+
+# Local installers
+Python.vsix
+
+# IDE and editor files
+.vscode/
+.idea/
+
+# Local backup files
+cloudguard/scanners/iam_scanner_backup.py
